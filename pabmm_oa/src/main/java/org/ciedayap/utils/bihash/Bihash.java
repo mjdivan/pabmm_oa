@@ -7,6 +7,10 @@ package org.ciedayap.utils.bihash;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 import org.ciedayap.pabmm.pd.requirements.Attributes;
 import org.ciedayap.pabmm.pd.requirements.Attribute;
@@ -49,6 +53,21 @@ public class Bihash implements Serializable{
         this.AttIDidx=pAttIDidx;
         
         lastAssignedPosition=-1;
+    }
+    
+    /**
+     * It is a default factory method
+     * @param size The size associated with the hash map
+     * @return The new bihash instance
+     * @throws BihashException It is raised when the size is invalid (i.e. null or under zero)
+     */
+    public synchronized static Bihash create(Integer size) throws BihashException
+    {
+        if(size==null || size<0) throw new BihashException("Invalida Size");
+        
+        if(size<10) size=10;
+        
+        return new Bihash(new ConcurrentHashMap(size),new ConcurrentHashMap(size));        
     }
     
     /**
@@ -103,6 +122,26 @@ public class Bihash implements Serializable{
         idxAtt.put(newPosition, att);
         
         return newPosition;
+    }
+    
+    /**
+     * It incorporates a collection of Attribute instances in the hash maps.
+     * @param list The collection to be incorporated
+     * @return An Integer Array with the respective positions of each attribute in the vector
+     * @throws BihashException It is raised when the list to be processed is null or empty
+     */
+    public synchronized Integer[] addCollection(Collection<Attribute> list) throws BihashException
+    {
+        if(list==null || list.isEmpty()) throw new BihashException("The list is null or empty");
+        Iterator<Attribute> it=list.iterator();
+        Integer ret[]=new Integer[list.size()];
+        int i=0;
+        while(it!=null && it.hasNext())
+        {
+         ret[i]=add(it.next());
+        }
+        
+        return ret;
     }
     
     /**
@@ -175,5 +214,57 @@ public class Bihash implements Serializable{
        this.lastAssignedPosition=-1;
        
        return true;
+    }
+    
+    /**
+     * It informs the total number of variable between attributes and context properties in the bihash table
+     * @return The dimension for a given vector
+     */
+    public Long dimension()
+    {
+        if(!this.isReady()) return (long)0;
+        
+        return this.idxAtt.mappingCount();
+    }
+    
+    /**
+     * The min position related to the representative vector of each tuple related to the Project Definition.
+     * When at least there exist one dimension, the min position is 0 (zero).
+     * @return The min position is zero when the vector has upper or equal than one dimension, null otherwise.
+     */
+    public Long minPosition()
+    {
+        return (dimension()>0)?(long)0:null;
+    }
+    
+    /**
+     * The max position related to the representative vector of each tuple associated with the Project Definition.
+     * It should be coincident with the (dimension()-1) because the initial position is zero
+     * @return The max position for the representative vector of each "tuple" from the project definition
+     */
+    public long maxPosition()
+    {
+        return lastAssignedPosition;
+    }
+    
+    /**
+     * It returns the ordered vector possitions following the ascending order
+     * @return The ordered keys from the Bihash instance, null otherwise
+     */
+    public ArrayList<Integer> getOrderedPositions()
+    {
+        if(!this.isReady()) return null;
+        if(dimension()==0) return null;
+        
+        Enumeration<Integer> list=idxAtt.keys();
+        ArrayList<Integer> keys=new ArrayList<Integer>();
+        while(list.hasMoreElements())
+        { 
+          keys.add(list.nextElement());
+        }
+        
+        Collections.sort(keys);
+        
+        return keys;
     }
 }
