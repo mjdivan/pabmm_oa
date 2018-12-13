@@ -6,10 +6,13 @@
 package org.ciedayap.utils.bihash;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Optional;
 import org.ciedayap.pabmm.pd.CINCAMIPD;
 import org.ciedayap.pabmm.pd.MeasurementProject;
 import org.ciedayap.pabmm.pd.MeasurementProjects;
+import org.ciedayap.pabmm.pd.context.ContextProperty;
 import org.ciedayap.pabmm.pd.requirements.Attribute;
 import org.ciedayap.utils.StringUtils;
 import org.ciedayap.utils.TranslateJSON;
@@ -95,8 +98,14 @@ public class AttributeExtractor implements Serializable{
                 project.get().getInfneed().getCharacterizedBy().getDescribedBy().getContextProperties().isEmpty())
             throw new ExtractorException("[Project] The Context for the Entity Category has not the associated context properties");
         
+        if(project.get().getInfneed().getSpecifiedEC().getMonitored()==null ||
+                project.get().getInfneed().getSpecifiedEC().getMonitored().getEntitiesList()==null ||
+                project.get().getInfneed().getSpecifiedEC().getMonitored().getEntitiesList().isEmpty())
+            throw new ExtractorException("[Project] There are not entities under monitoring associated to the project");
         
         Bihash bi=Bihash.create(10);
+        bi.setIDProject(IDProject);
+        bi.replaceEntities(project.get().getInfneed().getSpecifiedEC().getMonitored());
             
         if(bi==null) throw new BihashException("The Bihash instance could not be created");
         
@@ -119,5 +128,88 @@ public class AttributeExtractor implements Serializable{
         }
         
         return bi;
+    }
+
+    public static final String KEY_HM_IDPROJECT="idproject";
+    public static final String KEY_HM_ENTITIES="entities";
+    public static final String KEY_HM_ATTRIBUTES="attributes";
+    public static final String KEY_HM_CTXPROPERTIES="ctxproperties";
+    
+    /**
+     * It is responsible for extracting the attributes from the CINCAMIPD message to a Hash Map differentiating attributes from context properties.
+     * The CINCAMIPD message is organized in terms of the associated object model.
+     * @param pdefinition The CINCAMIPD message
+     * @param IDProject The ID of the project´s attributes which should be extracted in a Bihash instance
+     * @return The HashMap instance with the attributes associated with a given project
+     * @throws org.ciedayap.utils.bihash.ExtractorException  It happens when some formal aspect is not satisfied in the CINCAMIPD message (e.g. there not exist the Project ID in the message)
+     * @throws org.ciedayap.utils.bihash.BihashException It happens when the initial value assigned to the Bihash instance is invalid.
+     */
+    public static HashMap fromCINCAMIPDOmToHashMap(CINCAMIPD pdefinition, String IDProject) throws ExtractorException, BihashException
+    {
+        if(StringUtils.isEmpty(IDProject)) throw new ExtractorException("The IDProject is invalid");
+        if(pdefinition==null) throw new ExtractorException("The Project Definition is null");
+        if(!pdefinition.isDefinedProperties()) throw new ExtractorException("The Mandatory Properties are not established for the Project Definition");
+        
+        MeasurementProjects projects=pdefinition.getProjects();
+        if(projects==null || projects.getProjects()==null || projects.getProjects().size()<=0)
+            throw new ExtractorException("There are not projects inside the CINCAMIPD message");
+          
+        Optional<MeasurementProject> project=projects.getProjects().stream().filter(p-> p.getID().equalsIgnoreCase(IDProject)).findFirst();
+        if(project==null || !project.isPresent())
+            throw new ExtractorException("The Project´s ID has not been found in the CINCAMIPD message");
+        
+        if(project.get().getInfneed()==null)
+            throw new ExtractorException("[Project] The information need is not defined");
+        
+        if(project.get().getInfneed().getSpecifiedEC()==null)
+            throw new ExtractorException("[Project] The Entity Category is not defined"); 
+        
+        if(project.get().getInfneed().getSpecifiedEC().getDescribedBy()==null || 
+                project.get().getInfneed().getSpecifiedEC().getDescribedBy().getCharacteristics()==null ||
+                project.get().getInfneed().getSpecifiedEC().getDescribedBy().getCharacteristics().isEmpty())
+            throw new ExtractorException("[Project] The Attributes for the Entity Category is not defined");        
+        
+        if(project.get().getInfneed().getCharacterizedBy()==null)
+            throw new ExtractorException("[Project] The Context for the Entity Category is not defined");
+        
+        if(project.get().getInfneed().getCharacterizedBy().getDescribedBy()==null ||
+                project.get().getInfneed().getCharacterizedBy().getDescribedBy().getContextProperties()==null ||
+                project.get().getInfneed().getCharacterizedBy().getDescribedBy().getContextProperties().isEmpty())
+            throw new ExtractorException("[Project] The Context for the Entity Category has not the associated context properties");
+        
+        if(project.get().getInfneed().getSpecifiedEC().getMonitored()==null ||
+                project.get().getInfneed().getSpecifiedEC().getMonitored().getEntitiesList()==null ||
+                project.get().getInfneed().getSpecifiedEC().getMonitored().getEntitiesList().isEmpty())
+            throw new ExtractorException("[Project] There are not entities under monitoring associated to the project");
+        
+        HashMap map=new HashMap();
+        if(map==null) throw new BihashException("The HashMap could not be created");
+        
+        map.put(AttributeExtractor.KEY_HM_IDPROJECT, IDProject);//String
+        map.put(AttributeExtractor.KEY_HM_ENTITIES,project.get().getInfneed().getSpecifiedEC().getMonitored());//Entities            
+        
+        ArrayList<Attribute> attList=new ArrayList();
+        //The Entity Attributes
+        for(Attribute att:project.get().getInfneed().getSpecifiedEC().getDescribedBy().getCharacteristics())
+        {
+          if(!StringUtils.isEmpty(att.getID()) && !StringUtils.isEmpty(att.getName()))
+          {
+              attList.add(att);
+          }
+        }
+        map.put(AttributeExtractor.KEY_HM_ATTRIBUTES, attList);
+        
+        ArrayList<ContextProperty> ctxList=new ArrayList();
+        //The Context Properties
+        for(ContextProperty att:project.get().getInfneed().getCharacterizedBy().getDescribedBy().getContextProperties())
+        {
+          if(!StringUtils.isEmpty(att.getID()) && !StringUtils.isEmpty(att.getName()))
+          {
+              ctxList.add(att);
+          }  
+        }
+        map.put(AttributeExtractor.KEY_HM_CTXPROPERTIES, ctxList);
+                
+        return map;
     }
 }
